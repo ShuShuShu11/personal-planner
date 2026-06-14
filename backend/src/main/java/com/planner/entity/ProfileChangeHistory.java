@@ -15,7 +15,6 @@ public class ProfileChangeHistory {
     private String newLevel;
     private String changeType;
     private String reason;
-    private Long learningRecordId;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

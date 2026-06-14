@@ -5,5 +5,4 @@ import lombok.Data;
 @Data
 public class ProfileMdGenerateRequest {
     private String mdContent;
-    private Boolean includeLearning;
 }

@@ -10,8 +10,12 @@
           <span><el-icon color="#409eff"><Sunny /></el-icon> 今日概览</span>
         </div>
       </template>
+      <div class="stat-group-label">
+        <span class="dot dot-task"></span>
+        <span>任务表现</span>
+      </div>
       <el-row :gutter="16">
-        <el-col :span="6">
+        <el-col :span="12">
           <div class="stat-card">
             <div class="stat-num">{{ today?.totalTasks ?? '—' }}</div>
             <div class="stat-label">今日任务总数</div>
@@ -22,25 +26,11 @@
             </div>
           </div>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="12">
           <div class="stat-card">
             <div class="stat-num">{{ today?.todayMinutes ?? 0 }}</div>
             <div class="stat-label">今日任务专注分钟</div>
             <div class="stat-sub">基于已完成任务的 actualMinutes 累加</div>
-          </div>
-        </el-col>
-        <el-col :span="6">
-          <div class="stat-card">
-            <div class="stat-num">{{ today?.todayLearnings ?? 0 }}</div>
-            <div class="stat-label">今日学习记录</div>
-            <div class="stat-sub">今日新建的学习条目数</div>
-          </div>
-        </el-col>
-        <el-col :span="6">
-          <div class="stat-card">
-            <div class="stat-num">{{ range?.learningMinutes ?? 0 }}</div>
-            <div class="stat-label">近30天学习分钟</div>
-            <div class="stat-sub">{{ range?.learningCount ?? 0 }} 条记录 · {{ range?.activeDays ?? 0 }} 个活跃日</div>
           </div>
         </el-col>
       </el-row>
@@ -52,30 +42,28 @@
           <span><el-icon color="#67c23a"><DataLine /></el-icon> 近30天统计</span>
         </div>
       </template>
+      <div class="stat-group-label">
+        <span class="dot dot-task"></span>
+        <span>任务表现</span>
+      </div>
       <el-row :gutter="16">
-        <el-col :span="6">
+        <el-col :span="8">
           <div class="stat-card highlight">
             <div class="stat-num big">{{ range?.completionRate ?? 0 }}%</div>
             <div class="stat-label">30天完成率</div>
             <div class="stat-sub">{{ range?.doneTasks ?? 0 }} / {{ range?.totalTasks ?? 0 }} 任务</div>
           </div>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="8">
           <div class="stat-card">
             <div class="stat-num">{{ range?.doneTasks ?? 0 }}</div>
             <div class="stat-label">累计完成任务</div>
           </div>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="8">
           <div class="stat-card">
             <div class="stat-num">{{ range?.taskMinutes ?? 0 }}</div>
             <div class="stat-label">任务专注分钟</div>
-          </div>
-        </el-col>
-        <el-col :span="6">
-          <div class="stat-card">
-            <div class="stat-num">{{ range?.activeDays ?? 0 }}</div>
-            <div class="stat-label">有学习的天数</div>
           </div>
         </el-col>
       </el-row>
@@ -84,19 +72,14 @@
     <el-card shadow="never" class="section-card">
       <template #header>
         <div class="card-header">
-          <span><el-icon color="#e6a23c"><TrendCharts /></el-icon> 完成率趋势（30天）</span>
+          <span><el-icon color="#67c23a"><TrendCharts /></el-icon> 任务工作量与完成率（30天）</span>
         </div>
       </template>
-      <div ref="trendChartRef" style="height: 280px"></div>
-    </el-card>
-
-    <el-card shadow="never" class="section-card">
-      <template #header>
-        <div class="card-header">
-          <span><el-icon color="#909399"><Histogram /></el-icon> 每日完成任务数（30天）</span>
-        </div>
-      </template>
-      <div ref="barChartRef" style="height: 240px"></div>
+      <div class="stat-group-label">
+        <span class="dot dot-task"></span>
+        <span>任务表现 · 柱状=总任务数(工作量) / 折线=完成率%</span>
+      </div>
+      <div ref="chartRef" style="height: 360px"></div>
     </el-card>
   </div>
 </template>
@@ -109,8 +92,7 @@ import { analyticsApi } from '@/api/modules/analytics'
 const today = ref<any>(null)
 const range = ref<any>(null)
 const trendData = ref<any[]>([])
-const trendChartRef = ref<HTMLElement>()
-const barChartRef = ref<HTMLElement>()
+const chartRef = ref<HTMLElement>()
 
 const loadData = async () => {
   try {
@@ -122,46 +104,69 @@ const loadData = async () => {
     today.value = todayRes
     range.value = rangeRes
     trendData.value = trendRes || []
-    renderTrendChart()
-    renderBarChart()
+    renderChart()
   } catch (e) {
     console.error('analytics load failed', e)
   }
 }
 
-const renderTrendChart = () => {
-  if (!trendChartRef.value || trendData.value.length === 0) return
-  const chart = echarts.init(trendChartRef.value)
+const renderChart = () => {
+  if (!chartRef.value || trendData.value.length === 0) return
+  const chart = echarts.init(chartRef.value)
   const dates = trendData.value.map(d => d.date?.slice(5, 10) || '')
+  const totals = trendData.value.map(d => d.total || 0)
   const rates = trendData.value.map(d => Math.round(d.rate || 0))
   chart.setOption({
-    tooltip: { trigger: 'axis' },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        const idx = params[0].dataIndex
+        const d = trendData.value[idx]
+        return `<b>${d.date}</b><br/>` +
+               `总任务: <b>${d.total}</b><br/>` +
+               `已完成: <b>${d.done}</b><br/>` +
+               `完成率: <b>${Math.round(d.rate)}%</b>`
+      }
+    },
+    legend: { data: ['总任务数', '完成率'], top: 0, left: 'center' },
+    grid: { top: 50, left: 60, right: 70, bottom: 50 },
     xAxis: { type: 'category', data: dates, axisLabel: { rotate: 45 } },
-    yAxis: { type: 'value', max: 100, name: '完成率%' },
-    series: [{
-      data: rates,
-      type: 'line',
-      smooth: true,
-      areaStyle: { opacity: 0.3 },
-      itemStyle: { color: '#67c23a' }
-    }]
-  })
-}
-
-const renderBarChart = () => {
-  if (!barChartRef.value || trendData.value.length === 0) return
-  const chart = echarts.init(barChartRef.value)
-  const dates = trendData.value.map(d => d.date?.slice(5, 10) || '')
-  const counts = trendData.value.map(d => d.done || 0)
-  chart.setOption({
-    tooltip: { trigger: 'axis' },
-    xAxis: { type: 'category', data: dates, axisLabel: { rotate: 45 } },
-    yAxis: { type: 'value', name: '完成任务数' },
-    series: [{
-      data: counts,
-      type: 'bar',
-      itemStyle: { color: '#409eff' }
-    }]
+    yAxis: [
+      { type: 'value', name: '任务数', position: 'left' },
+      { type: 'value', name: '完成率%', position: 'right', min: 0, max: 100 }
+    ],
+    series: [
+      {
+        name: '总任务数',
+        type: 'bar',
+        data: totals,
+        yAxisIndex: 0,
+        itemStyle: { color: '#67c23a', borderRadius: [4, 4, 0, 0] },
+        barMaxWidth: 28
+      },
+      {
+        name: '完成率',
+        type: 'line',
+        yAxisIndex: 1,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 7,
+        data: rates,
+        itemStyle: { color: '#409eff' },
+        lineStyle: { width: 2 },
+        areaStyle: { opacity: 0.12 },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          data: [{
+            yAxis: 80,
+            lineStyle: { color: '#e6a23c', type: 'dashed' },
+            label: { formatter: '目标 80%', color: '#e6a23c', position: 'start', distance: 8 }
+          }]
+        }
+      }
+    ]
   })
 }
 
@@ -174,6 +179,26 @@ onMounted(loadData)
 .page-header h2 { margin: 0; font-size: 22px; font-weight: 600; }
 
 .section-card { margin-bottom: 16px; border-radius: 8px; }
+
+.stat-group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5e6d82;
+  margin-bottom: 10px;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.dot-task { background: #67c23a; }
+.dot-learn { background: #409eff; }
+.mt-16 { margin-top: 16px; }
+
 .card-header {
   display: flex;
   align-items: center;

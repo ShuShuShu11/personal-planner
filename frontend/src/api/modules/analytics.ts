@@ -26,7 +26,6 @@ export interface TodayOverview {
   doingCount: number
   doneCount: number
   todayMinutes: number
-  todayLearnings: number
 }
 
 export interface RangeOverview {
@@ -34,7 +33,4 @@ export interface RangeOverview {
   doneTasks: number
   completionRate: number
   taskMinutes: number
-  learningCount: number
-  learningMinutes: number
-  activeDays: number
 }

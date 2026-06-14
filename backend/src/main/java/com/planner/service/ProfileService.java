@@ -8,14 +8,14 @@ import com.planner.dto.request.ProfileMdGenerateRequest;
 import com.planner.dto.request.SkillUpdateRequest;
 import com.planner.dto.response.ProfileAiUpdateResponse;
 import com.planner.dto.response.ProfileMdResponse;
-import com.planner.entity.LearningRecord;
 import com.planner.entity.ProfileChangeHistory;
+import com.planner.entity.ProfileDocument;
 import com.planner.entity.SkillProfile;
-import com.planner.mapper.LearningRecordMapper;
+import com.planner.entity.Task;
 import com.planner.mapper.ProfileChangeHistoryMapper;
 import com.planner.mapper.ProfileDocumentMapper;
 import com.planner.mapper.SkillProfileMapper;
-import com.planner.entity.ProfileDocument;
+import com.planner.mapper.TaskMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,7 +37,7 @@ public class ProfileService {
 
     private final SkillProfileMapper profileMapper;
     private final ProfileChangeHistoryMapper historyMapper;
-    private final LearningRecordMapper learningMapper;
+    private final TaskMapper taskMapper;
     private final ProfileDocumentMapper profileDocumentMapper;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RestTemplate restTemplate = new RestTemplate(buildFactory());
@@ -127,15 +127,8 @@ public class ProfileService {
         }
         if (regenerate) {
             List<SkillProfile> profile = getProfile(userId);
-            List<LearningRecord> records = new ArrayList<>();
-            if (req.getIncludeLearning() == null || req.getIncludeLearning()) {
-                records = learningMapper.selectList(
-                        new LambdaQueryWrapper<LearningRecord>()
-                                .eq(LearningRecord::getUserId, userId)
-                                .ge(LearningRecord::getCreatedAt, LocalDateTime.now().minusDays(30))
-                                .orderByAsc(LearningRecord::getCreatedAt));
-            }
-            String prompt = buildMdProfilePrompt(profile, records, sourceMd);
+            List<Task> doneTasks = getRecentDoneTasks(userId, 30, 50);
+            String prompt = buildMdProfilePrompt(profile, doneTasks, sourceMd);
             markdown = callLlmForMd(prompt);
             suggested = extractSuggestedSkills(markdown);
         } else {
@@ -179,13 +172,14 @@ public class ProfileService {
     @Transactional
     public ProfileAiUpdateResponse aiUpdate(Long userId, ProfileAiUpdateRequest req) {
         LocalDateTime since = req.getSince() != null ? req.getSince() : LocalDateTime.now().minusDays(7);
-        List<LearningRecord> records = learningMapper.selectList(
-                new LambdaQueryWrapper<LearningRecord>()
-                        .eq(LearningRecord::getUserId, userId)
-                        .ge(LearningRecord::getCreatedAt, since)
-                        .orderByAsc(LearningRecord::getCreatedAt));
+        List<Task> doneTasks = taskMapper.selectList(
+                new LambdaQueryWrapper<Task>()
+                        .eq(Task::getUserId, userId)
+                        .eq(Task::getStatus, "done")
+                        .ge(Task::getFinishAt, since)
+                        .orderByAsc(Task::getFinishAt));
         List<SkillProfile> profile = getProfile(userId);
-        String prompt = buildAiUpdatePrompt(profile, records);
+        String prompt = buildAiUpdatePrompt(profile, doneTasks);
         ProfileAiUpdateResponse response = callLlm(prompt);
         for (ProfileAiUpdateResponse.SkillUpdate u : response.getUpdates()) {
             String newLevel = normalizeLevel(u.getNewLevel());
@@ -205,6 +199,17 @@ public class ProfileService {
         return response;
     }
 
+    private List<Task> getRecentDoneTasks(Long userId, int days, int limit) {
+        LocalDateTime since = LocalDateTime.now().minusDays(days);
+        return taskMapper.selectList(
+                new LambdaQueryWrapper<Task>()
+                        .eq(Task::getUserId, userId)
+                        .eq(Task::getStatus, "done")
+                        .ge(Task::getFinishAt, since)
+                        .orderByDesc(Task::getFinishAt)
+                        .last("LIMIT " + limit));
+    }
+
     private String normalizeLevel(String level) {
         if (level == null) return null;
         String s = level.trim().toUpperCase();
@@ -222,9 +227,9 @@ public class ProfileService {
         return null;
     }
 
-    private String buildAiUpdatePrompt(List<SkillProfile> profile, List<LearningRecord> records) {
+    private String buildAiUpdatePrompt(List<SkillProfile> profile, List<Task> doneTasks) {
         StringBuilder sb = new StringBuilder();
-        sb.append("你是一个专业的技术教练。请分析用户最近的学习记录，更新其技能画像。\n\n");
+        sb.append("你是一个专业的技术教练。请分析用户最近完成的任务，更新其技能画像。\n\n");
         sb.append("## 当前技能画像\n");
         sb.append("[");
         for (int i = 0; i < profile.size(); i++) {
@@ -233,16 +238,22 @@ public class ProfileService {
                     p.getCategory(), p.getSkillName(), p.getLevel(), p.getNotes() != null ? p.getNotes() : ""));
             if (i < profile.size() - 1) sb.append(",");
         }
-        sb.append("]\n\n## 最近学习记录\n[");
-        for (int i = 0; i < records.size(); i++) {
-            LearningRecord r = records.get(i);
-            sb.append(String.format("{\"date\": \"%s\", \"title\": \"%s\", \"content\": \"%s\", \"duration\": %d}",
-                    r.getCreatedAt().toLocalDate(), r.getTitle(),
-                    r.getContent() != null ? r.getContent().substring(0, Math.min(200, r.getContent().length())) : "",
-                    r.getDurationMinutes() != null ? r.getDurationMinutes() : 0));
-            if (i < records.size() - 1) sb.append(",");
+        sb.append("]\n\n## 最近完成的任务\n[");
+        for (int i = 0; i < doneTasks.size(); i++) {
+            Task t = doneTasks.get(i);
+            String desc = t.getDescription() != null
+                    ? t.getDescription().substring(0, Math.min(200, t.getDescription().length()))
+                    : "";
+            String tags = t.getTags() != null ? t.getTags() : "[]";
+            sb.append(String.format("{\"date\": \"%s\", \"title\": \"%s\", \"description\": \"%s\", \"actualMinutes\": %d, \"tags\": %s}",
+                    t.getFinishAt() != null ? t.getFinishAt().toLocalDate() : "",
+                    t.getTitle(),
+                    desc,
+                    t.getActualMinutes() != null ? t.getActualMinutes() : 0,
+                    tags));
+            if (i < doneTasks.size() - 1) sb.append(",");
         }
-        sb.append("]\n\n请返回JSON（严格按格式，返回的updates必须来自学习记录的直接支撑，不要过度提升）：\n");
+        sb.append("]\n\n请返回JSON（严格按格式，返回的updates必须来自已完成任务直接支撑的技能，不要过度提升）：\n");
         sb.append("{\"updates\": [{\"skill\": \"技能名\", \"oldLevel\": \"B\", \"newLevel\": \"B+\", \"reason\": \"原因\"}], \"summary\": \"本周技术提升...\"}");
         return sb.toString();
     }
@@ -309,15 +320,8 @@ public class ProfileService {
 
     public ProfileMdResponse generateMdProfile(Long userId, ProfileMdGenerateRequest req) {
         List<SkillProfile> profile = getProfile(userId);
-        List<LearningRecord> records = new ArrayList<>();
-        if (req.getIncludeLearning() != null && req.getIncludeLearning()) {
-            records = learningMapper.selectList(
-                    new LambdaQueryWrapper<LearningRecord>()
-                            .eq(LearningRecord::getUserId, userId)
-                            .ge(LearningRecord::getCreatedAt, LocalDateTime.now().minusDays(30))
-                            .orderByAsc(LearningRecord::getCreatedAt));
-        }
-        String prompt = buildMdProfilePrompt(profile, records, req.getMdContent());
+        List<Task> doneTasks = getRecentDoneTasks(userId, 30, 50);
+        String prompt = buildMdProfilePrompt(profile, doneTasks, req.getMdContent());
         String md = callLlmForMd(prompt);
         List<String> suggested = extractSuggestedSkills(md);
         ProfileMdResponse response = new ProfileMdResponse();
@@ -326,10 +330,10 @@ public class ProfileService {
         return response;
     }
 
-    private String buildMdProfilePrompt(List<SkillProfile> profile, List<LearningRecord> records, String uploadedMd) {
+    private String buildMdProfilePrompt(List<SkillProfile> profile, List<Task> doneTasks, String uploadedMd) {
         StringBuilder sb = new StringBuilder();
         sb.append("你是一位资深技术专家兼职业规划顾问。你的任务是基于【用户上传的文档】（最权威依据）、\n");
-        sb.append("结合【当前技能画像】和【最近学习记录】，生成一份**结构清晰、内容精炼、忠实于用户原文**的\n");
+        sb.append("结合【当前技能画像】和【最近完成的任务】，生成一份**结构清晰、内容精炼、忠实于用户原文**的\n");
         sb.append("个人技术画像（Markdown 格式）。\n\n");
 
         sb.append("## ⚠️ 重要原则\n");
@@ -337,14 +341,15 @@ public class ProfileService {
         sb.append("2. 用户在文档中已经给出明确评级（如\"熟练/掌握/了解\"），请**直接映射**到 S/A/B/C/D：\n");
         sb.append("   - 熟练/精通 → A 或 S；掌握 → B；了解 → C；薄弱/入门 → D\n");
         sb.append("3. 不要凭空编造用户没提到的项目或技术\n");
-        sb.append("4. 文档中提到的【核心竞争力】【P0/P1/P2 优先级】【能力矩阵】等结构，请**直接吸收**到对应章节\n\n");
+        sb.append("4. 文档中提到的【核心竞争力】【P0/P1/P2 优先级】【能力矩阵】等结构，请**直接吸收**到对应章节\n");
+        sb.append("5. **结合最近完成的任务**：可由此推断用户的实际投入方向（参考任务 tags / 描述）\n\n");
 
         sb.append("## 用户上传文档（作为画像主要基础）\n");
         if (uploadedMd != null && !uploadedMd.trim().isEmpty()) {
             String trimmed = uploadedMd.length() > 12000 ? uploadedMd.substring(0, 12000) + "\n...(文档已截断)..." : uploadedMd;
             sb.append("```\n").append(trimmed).append("\n```\n\n");
         } else {
-            sb.append("（未提供，请基于系统中的技能画像和学习记录生成）\n\n");
+            sb.append("（未提供，请基于系统中的技能画像和最近完成的任务生成）\n\n");
         }
 
         sb.append("## 当前技能画像（系统记录）\n");
@@ -359,16 +364,26 @@ public class ProfileService {
             sb.append("\n");
         }
 
-        sb.append("## 最近学习记录（最多 30 天）\n");
-        if (records.isEmpty()) {
+        sb.append("## 最近完成的任务（最多 30 天）\n");
+        if (doneTasks.isEmpty()) {
             sb.append("（暂无）\n\n");
         } else {
-            for (LearningRecord r : records) {
-                String content = r.getContent() != null ? r.getContent() : "";
-                content = content.length() > 150 ? content.substring(0, 150) + "..." : content;
-                sb.append(String.format("- [%s] %s（%d分钟）：%s\n",
-                        r.getCreatedAt().toLocalDate(), r.getTitle(),
-                        r.getDurationMinutes() != null ? r.getDurationMinutes() : 0, content));
+            for (Task t : doneTasks) {
+                String desc = t.getDescription() != null ? t.getDescription() : "";
+                desc = desc.length() > 150 ? desc.substring(0, 150) + "..." : desc;
+                String tags = "";
+                try {
+                    if (t.getTags() != null && !t.getTags().isEmpty()) {
+                        List<String> tagList = objectMapper.readValue(t.getTags(), List.class);
+                        tags = " [" + String.join(", ", tagList) + "]";
+                    }
+                } catch (Exception ignored) {}
+                sb.append(String.format("- [%s] %s（%d分钟）%s：%s\n",
+                        t.getFinishAt() != null ? t.getFinishAt().toLocalDate() : "",
+                        t.getTitle(),
+                        t.getActualMinutes() != null ? t.getActualMinutes() : 0,
+                        tags,
+                        desc));
             }
             sb.append("\n");
         }

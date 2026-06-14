@@ -81,9 +81,6 @@
         </el-form>
 
         <el-form v-if="hasUpload" label-position="top" size="default">
-          <el-form-item v-if="mdContent.trim()">
-            <el-checkbox v-model="includeLearning">同时参考最近 30 天的学习记录</el-checkbox>
-          </el-form-item>
         </el-form>
       </el-card>
     </transition>
@@ -235,7 +232,7 @@
             </template>
             <ul class="tips-list">
               <li>定期更新简历/技术总结，让 AI 持续追踪你的成长</li>
-              <li>勾选「参考学习记录」可让 AI 结合你最近的学习动态</li>
+              <li>AI 会自动结合最近完成的任务（标题/描述/标签）来判断成长方向</li>
               <li>编辑画像可手动微调 AI 的输出内容</li>
               <li>下载 Markdown 用于求职/汇报场景</li>
             </ul>
@@ -265,7 +262,6 @@ import dayjs from 'dayjs'
 const history = ref<ProfileChangeHistory[]>([])
 
 const mdContent = ref('')
-const includeLearning = ref(true)
 const generating = ref(false)
 const saving = ref(false)
 const mdResult = ref<ProfileMdResponse | null>(null)
@@ -337,8 +333,7 @@ const generateMdProfile = async () => {
   generating.value = true
   try {
     mdResult.value = await profileApi.aiGenerateMd({
-      mdContent: mdContent.value,
-      includeLearning: includeLearning.value
+      mdContent: mdContent.value
     }) as ProfileMdResponse
     ElMessage.success('画像生成完成')
     uploadExpanded.value = false

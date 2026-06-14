@@ -1,15 +1,12 @@
 package com.planner.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.planner.entity.LearningRecord;
 import com.planner.entity.Task;
-import com.planner.mapper.LearningRecordMapper;
 import com.planner.mapper.TaskMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -17,7 +14,6 @@ import java.util.*;
 public class AnalyticsService {
 
     private final TaskMapper taskMapper;
-    private final LearningRecordMapper learningMapper;
 
     public List<Map<String, Object>> getHeatmap(Long userId, int days) {
         LocalDate start = LocalDate.now().minusDays(days);
@@ -90,7 +86,7 @@ public class AnalyticsService {
     }
 
     /**
-     * 今日总览：今日任务数 / 学习中 / 待办 / 已完成 / 今日专注分钟 / 今日学习记录
+     * 今日总览：今日任务数 / 待办 / 进行 / 已完成 / 今日专注分钟
      */
     public Map<String, Object> getTodayOverview(Long userId) {
         LocalDate today = LocalDate.now();
@@ -104,28 +100,20 @@ public class AnalyticsService {
                 .filter(t -> "done".equals(t.getStatus()))
                 .mapToInt(t -> t.getActualMinutes() != null ? t.getActualMinutes() : 0)
                 .sum();
-        long todayLearnings = learningMapper.selectCount(new LambdaQueryWrapper<LearningRecord>()
-                .eq(LearningRecord::getUserId, userId)
-                .ge(LearningRecord::getCreatedAt, today.atStartOfDay())
-                .lt(LearningRecord::getCreatedAt, today.plusDays(1).atStartOfDay()));
-
         Map<String, Object> result = new HashMap<>();
         result.put("totalTasks", todayTasks.size());
         result.put("todoCount", todoCount);
         result.put("doingCount", doingCount);
         result.put("doneCount", doneCount);
         result.put("todayMinutes", todayMinutes);
-        result.put("todayLearnings", todayLearnings);
         return result;
     }
 
     /**
-     * 30 天总览：累计完成 / 累计任务数 / 累计学习记录 / 累计学习分钟 / 完成率
+     * 30 天总览：累计完成 / 累计任务数 / 任务专注分钟 / 完成率
      */
     public Map<String, Object> getRangeOverview(Long userId, int days) {
         LocalDate start = LocalDate.now().minusDays(days);
-        LocalDateTime startDt = start.atStartOfDay();
-        LocalDateTime endDt = LocalDate.now().plusDays(1).atStartOfDay();
         List<Task> tasks = taskMapper.selectList(new LambdaQueryWrapper<Task>()
                 .eq(Task::getUserId, userId)
                 .ge(Task::getPlannedDate, start)
@@ -136,28 +124,11 @@ public class AnalyticsService {
                 .filter(t -> "done".equals(t.getStatus()))
                 .mapToInt(t -> t.getActualMinutes() != null ? t.getActualMinutes() : 0)
                 .sum();
-        List<LearningRecord> records = learningMapper.selectList(new LambdaQueryWrapper<LearningRecord>()
-                .eq(LearningRecord::getUserId, userId)
-                .ge(LearningRecord::getCreatedAt, startDt)
-                .lt(LearningRecord::getCreatedAt, endDt));
-        int learningMinutes = records.stream()
-                .mapToInt(r -> r.getDurationMinutes() != null ? r.getDurationMinutes() : 0)
-                .sum();
-        Map<LocalDate, Integer> learningByDay = new HashMap<>();
-        for (LearningRecord r : records) {
-            LocalDate d = r.getCreatedAt().toLocalDate();
-            learningByDay.merge(d,
-                    r.getDurationMinutes() != null ? r.getDurationMinutes() : 0,
-                    Integer::sum);
-        }
         Map<String, Object> result = new HashMap<>();
         result.put("totalTasks", total);
         result.put("doneTasks", done);
         result.put("completionRate", total > 0 ? Math.round(done * 100.0 / total) : 0);
         result.put("taskMinutes", totalMinutes);
-        result.put("learningCount", records.size());
-        result.put("learningMinutes", learningMinutes);
-        result.put("activeDays", learningByDay.size());
         return result;
     }
 }

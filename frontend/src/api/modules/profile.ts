@@ -39,7 +39,6 @@ export interface ProfileAiUpdateResponse {
 
 export interface ProfileMdGenerateRequest {
   mdContent?: string
-  includeLearning?: boolean
 }
 
 export interface ProfileMdResponse {
@@ -62,5 +61,4 @@ export interface ProfileDocumentUpdateRequest {
   markdown?: string
   sourceMd?: string
   regenerate?: boolean
-  includeLearning?: boolean
 }

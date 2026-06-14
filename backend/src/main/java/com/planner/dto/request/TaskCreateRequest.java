@@ -15,6 +15,6 @@ public class TaskCreateRequest {
     private LocalDate dueAt;
     private LocalDate plannedDate;
     private Long goalId;
-    private List<Long> tagIds;
+    private List<String> tags;
     private List<String> subTaskTitles;
 }

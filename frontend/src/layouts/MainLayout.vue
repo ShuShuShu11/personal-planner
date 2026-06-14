@@ -23,10 +23,6 @@
           <el-icon><Edit /></el-icon>
           <template #title>每日复盘</template>
         </el-menu-item>
-        <el-menu-item index="/learnings">
-          <el-icon><Reading /></el-icon>
-          <template #title>学习记录</template>
-        </el-menu-item>
         <el-menu-item index="/profile">
           <el-icon><User /></el-icon>
           <template #title>个人画像</template>
@@ -88,7 +84,6 @@ const titleMap: Record<string, string> = {
   '/today': '任务中心',
   '/tasks': '任务中心',
   '/review': '每日复盘',
-  '/learnings': '学习记录',
   '/profile': '个人画像',
   '/analytics': '数据分析'
 }

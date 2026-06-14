@@ -61,6 +61,7 @@ CREATE TABLE task (
     finish_at DATETIME COMMENT '实际完成时间',
     due_at DATE COMMENT '截止日期',
     planned_date DATE COMMENT '计划日期',
+    tags JSON COMMENT '标签列表（自由文本）',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_id (user_id),
@@ -147,24 +148,8 @@ CREATE TABLE profile_change_history (
     new_level VARCHAR(10) NOT NULL,
     change_type ENUM('increase','decrease','new','manual','ai') NOT NULL,
     reason TEXT,
-    learning_record_id BIGINT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_user_id (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 学习记录表
-CREATE TABLE learning_record (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    title VARCHAR(200) NOT NULL,
-    content TEXT,
-    duration_minutes INT COMMENT '学习时长(分钟)',
-    tags JSON COMMENT '标签列表',
-    source VARCHAR(100) COMMENT '来源：文档/视频/项目/面试准备',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_user_id (user_id),
-    INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 插入默认测试用户 (密码: test123)

@@ -100,6 +100,16 @@
               </el-tag>
             </div>
             <div v-if="task.description" class="task-desc">{{ task.description }}</div>
+            <div v-if="parseTags(task.tags).length" class="task-tags">
+              <el-tag
+                v-for="(t, i) in parseTags(task.tags)"
+                :key="i"
+                size="small"
+                type="info"
+                effect="plain"
+                class="tag-mini"
+              >{{ t }}</el-tag>
+            </div>
             <div class="task-meta">
               <span v-if="task.plannedMinutes" class="meta-item">
                 <el-icon><Clock /></el-icon>
@@ -189,6 +199,19 @@
           <template #default="{ row }">
             <span v-if="row.plannedMinutes">{{ formatMinutes(row.plannedMinutes) }}</span>
             <span v-else>—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="标签" min-width="140">
+          <template #default="{ row }">
+            <el-tag
+              v-for="(t, i) in parseTags(row.tags)"
+              :key="i"
+              size="small"
+              type="info"
+              effect="plain"
+              class="tag-mini"
+              style="margin-right: 4px"
+            >{{ t }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
@@ -292,6 +315,28 @@
             value-format="YYYY-MM-DD"
           />
         </el-form-item>
+        <el-form-item label="标签">
+          <el-tag
+            v-for="(t, i) in taskForm.tags"
+            :key="i"
+            closable
+            type="info"
+            effect="plain"
+            class="tag-chip"
+            @close="removeTag(i)"
+          >{{ t }}</el-tag>
+          <el-input
+            v-if="tagInputVisible"
+            ref="tagInputRef"
+            v-model="tagInputValue"
+            class="tag-input"
+            size="small"
+            @keyup.enter="confirmTag"
+            @keyup.,="confirmTag"
+            @blur="confirmTag"
+          />
+          <el-button v-else size="small" type="primary" plain @click="showTagInput">+ 添加标签</el-button>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
@@ -302,7 +347,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import dayjs from 'dayjs'
 import { taskApi, type Task } from '@/api/modules/task'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -324,8 +369,32 @@ const taskForm = reactive({
   hours: 0,
   minutes: 30,
   plannedDate: today.value,
-  dueAt: ''
+  dueAt: '',
+  tags: [] as string[]
 })
+const tagInputVisible = ref(false)
+const tagInputValue = ref('')
+const tagInputRef = ref<any>(null)
+
+const showTagInput = () => {
+  tagInputVisible.value = true
+  nextTick(() => tagInputRef.value?.focus?.())
+}
+const confirmTag = () => {
+  const v = tagInputValue.value.trim()
+  if (v && !taskForm.tags.includes(v)) taskForm.tags.push(v)
+  tagInputValue.value = ''
+  tagInputVisible.value = false
+}
+const removeTag = (i: number) => { taskForm.tags.splice(i, 1) }
+
+const parseTags = (raw?: string): string[] => {
+  if (!raw) return []
+  try {
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? arr.map(String) : []
+  } catch { return [] }
+}
 
 const hourMarks = computed(() => {
   const marks: Record<number, any> = { 0: '0', 3: '3h', 6: '6h', 9: '9h', 12: '12h' }
@@ -389,7 +458,8 @@ const openAddDialog = () => {
     hours: 0,
     minutes: 30,
     plannedDate: today.value,
-    dueAt: ''
+    dueAt: '',
+    tags: []
   })
   showDialog.value = true
 }
@@ -404,7 +474,8 @@ const openEditDialog = (task: Task) => {
     hours: Math.floor(total / 60),
     minutes: total % 60,
     plannedDate: task.plannedDate || today.value,
-    dueAt: task.dueAt || ''
+    dueAt: task.dueAt || '',
+    tags: parseTags(task.tags)
   })
   showDialog.value = true
 }
@@ -420,7 +491,8 @@ const submitTask = async () => {
     priority: taskForm.priority,
     plannedMinutes: taskForm.hours * 60 + taskForm.minutes,
     plannedDate: taskForm.plannedDate,
-    dueAt: taskForm.dueAt
+    dueAt: taskForm.dueAt,
+    tags: taskForm.tags
   }
   try {
     if (editingId.value) {
@@ -620,6 +692,16 @@ onMounted(loadAllData)
   align-items: center;
   gap: 3px;
 }
+
+.task-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0;
+}
+.tag-mini { font-size: 11px; }
+.tag-chip { margin-right: 6px; margin-bottom: 4px; }
+.tag-input { width: 100px; margin-right: 6px; vertical-align: bottom; }
 
 .task-card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 

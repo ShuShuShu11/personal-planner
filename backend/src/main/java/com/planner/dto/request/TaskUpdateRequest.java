@@ -14,7 +14,7 @@ public class TaskUpdateRequest {
     private LocalDate dueAt;
     private LocalDate plannedDate;
     private Long goalId;
-    private List<Long> tagIds;
+    private List<String> tags;
     private List<Long> subTaskIds;
     private List<String> subTaskTitles;
 }

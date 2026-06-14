@@ -26,6 +26,7 @@ export interface Task {
   finishAt?: string
   dueAt?: string
   plannedDate?: string
+  tags?: string
   createdAt: string
   updatedAt: string
 }

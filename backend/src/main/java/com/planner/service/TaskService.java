@@ -2,6 +2,8 @@ package com.planner.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.planner.common.BusinessException;
 import com.planner.common.PageResult;
 import com.planner.dto.request.TaskCreateRequest;
@@ -17,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -25,6 +28,7 @@ public class TaskService {
 
     private final TaskMapper taskMapper;
     private final SubTaskMapper subTaskMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public List<Task> getTodayTasks(Long userId) {
         LocalDate today = LocalDate.now();
@@ -66,6 +70,7 @@ public class TaskService {
         task.setPlannedMinutes(req.getPlannedMinutes());
         task.setDueAt(req.getDueAt());
         task.setPlannedDate(req.getPlannedDate() != null ? req.getPlannedDate() : LocalDate.now());
+        task.setTags(serializeTags(req.getTags()));
         taskMapper.insert(task);
         if (req.getSubTaskTitles() != null) {
             for (String title : req.getSubTaskTitles()) {
@@ -89,6 +94,7 @@ public class TaskService {
         if (req.getPlannedMinutes() != null) task.setPlannedMinutes(req.getPlannedMinutes());
         if (req.getDueAt() != null) task.setDueAt(req.getDueAt());
         if (req.getPlannedDate() != null) task.setPlannedDate(req.getPlannedDate());
+        if (req.getTags() != null) task.setTags(serializeTags(req.getTags()));
         taskMapper.updateById(task);
         return task;
     }
@@ -168,5 +174,25 @@ public class TaskService {
         Task task = getTask(userId, st.getTaskId());
         st.setDone(done);
         subTaskMapper.updateById(st);
+    }
+
+    public List<String> parseTags(Task task) {
+        if (task == null || task.getTags() == null || task.getTags().isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            return objectMapper.readValue(task.getTags(), new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    private String serializeTags(List<String> tags) {
+        if (tags == null || tags.isEmpty()) return null;
+        try {
+            return objectMapper.writeValueAsString(tags);
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

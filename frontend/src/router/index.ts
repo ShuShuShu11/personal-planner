@@ -31,11 +31,6 @@ const router = createRouter({
           meta: { title: '每日复盘' }
         },
         {
-          path: '/learnings',
-          component: () => import('@/views/learnings/index.vue'),
-          meta: { title: '学习记录' }
-        },
-        {
           path: '/profile',
           component: () => import('@/views/profile/index.vue'),
           meta: { title: '个人画像' }

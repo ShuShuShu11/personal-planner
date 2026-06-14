@@ -21,6 +21,7 @@ public class Task {
     private LocalDateTime finishAt;
     private LocalDate dueAt;
     private LocalDate plannedDate;
+    private String tags;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
     @TableField(fill = FieldFill.INSERT_UPDATE)

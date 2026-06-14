@@ -69,7 +69,6 @@ public class ProfileController {
     private ProfileDocumentUpdateRequest toUpdateRequest(ProfileMdGenerateRequest src, boolean regenerate) {
         ProfileDocumentUpdateRequest r = new ProfileDocumentUpdateRequest();
         r.setSourceMd(src.getMdContent());
-        r.setIncludeLearning(src.getIncludeLearning());
         r.setRegenerate(regenerate);
         return r;
     }
