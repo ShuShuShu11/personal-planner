@@ -124,10 +124,12 @@ public class AnalyticsService {
      */
     public Map<String, Object> getRangeOverview(Long userId, int days) {
         LocalDate start = LocalDate.now().minusDays(days);
+        LocalDateTime startDt = start.atStartOfDay();
+        LocalDateTime endDt = LocalDate.now().plusDays(1).atStartOfDay();
         List<Task> tasks = taskMapper.selectList(new LambdaQueryWrapper<Task>()
                 .eq(Task::getUserId, userId)
                 .ge(Task::getPlannedDate, start)
-                .le(Task::getPlannedDate, LocalDate.now()));
+                .lt(Task::getPlannedDate, LocalDate.now().plusDays(1)));
         long total = tasks.size();
         long done = tasks.stream().filter(t -> "done".equals(t.getStatus())).count();
         int totalMinutes = tasks.stream()
@@ -136,7 +138,8 @@ public class AnalyticsService {
                 .sum();
         List<LearningRecord> records = learningMapper.selectList(new LambdaQueryWrapper<LearningRecord>()
                 .eq(LearningRecord::getUserId, userId)
-                .ge(LearningRecord::getCreatedAt, start.atStartOfDay()));
+                .ge(LearningRecord::getCreatedAt, startDt)
+                .lt(LearningRecord::getCreatedAt, endDt));
         int learningMinutes = records.stream()
                 .mapToInt(r -> r.getDurationMinutes() != null ? r.getDurationMinutes() : 0)
                 .sum();
